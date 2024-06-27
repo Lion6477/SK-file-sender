@@ -1,11 +1,7 @@
-﻿using System;
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
-using System.Net;
 using System.Net.Sockets;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using LiveChartsCore;
@@ -93,28 +89,41 @@ namespace SK_Sender_App
 
                 using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
                 {
-                    byte[] buffer = new byte[4096];
-                    int bytesRead;
-                    long totalBytesSent = 0;
-                    stopwatch.Start();
+                    long fileSize = fs.Length;
+                    Dispatcher.Invoke(() => progressBarSend.Maximum = fileSize);
 
-                    while ((bytesRead = fs.Read(buffer, 0, buffer.Length)) > 0)
+                    using (BinaryWriter bw = new BinaryWriter(ns))
                     {
-                        ns.Write(buffer, 0, bytesRead);
-                        totalBytesSent += bytesRead;
+                        // Send file size first
+                        bw.Write(fileSize);
+                        bw.Flush();
 
-                        // Calculate and update speed
-                        double elapsedSeconds = stopwatch.Elapsed.TotalSeconds;
-                        double speed = (totalBytesSent * 8) / elapsedSeconds / 1_000_000; // Speed in Mbps
-                        Dispatcher.Invoke(() => UpdateSpeedData(speed));
+                        byte[] buffer = new byte[4096];
+                        int bytesRead;
+                        long totalBytesSent = 0;
+                        stopwatch.Start();
 
-                        if (token.IsCancellationRequested)
+                        while ((bytesRead = fs.Read(buffer, 0, buffer.Length)) > 0)
                         {
-                            break;
-                        }
-                    }
+                            ns.Write(buffer, 0, bytesRead);
+                            totalBytesSent += bytesRead;
 
-                    stopwatch.Stop();
+                            // Update progress bar
+                            Dispatcher.Invoke(() => progressBarSend.Value = totalBytesSent);
+
+                            // Calculate and update speed
+                            double elapsedSeconds = stopwatch.Elapsed.TotalSeconds;
+                            double speed = (totalBytesSent * 8) / elapsedSeconds / 1_000_000; // Speed in Mbps
+                            Dispatcher.Invoke(() => UpdateSpeedData(speed));
+
+                            if (token.IsCancellationRequested)
+                            {
+                                break;
+                            }
+                        }
+
+                        stopwatch.Stop();
+                    }
                 }
 
                 Dispatcher.Invoke(() => txtStatusSend.Text = "File sent successfully.");
@@ -129,7 +138,7 @@ namespace SK_Sender_App
         private void UpdateSpeedData(double speed)
         {
             speedData.Add(speed);
-            if (speedData.Count > 100) // Limiting the number of data points
+            if (speedData.Count > 60) // Limiting the number of data points to the last 60 seconds
             {
                 speedData.RemoveAt(0);
             }
