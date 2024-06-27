@@ -1,7 +1,11 @@
-﻿using System.Collections.ObjectModel;
+﻿using System;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
 using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using LiveChartsCore;
@@ -30,7 +34,24 @@ namespace SK_Sender_App
                     Fill = null
                 }
             };
-            Dispatcher.Invoke(() => txtStatusSend.Text = "Input ip");
+
+            speedChartSend.XAxes = new Axis[]
+            {
+                new Axis
+                {
+                    Labeler = value => value.ToString("F0"),
+                    Name = "Time (s)"
+                }
+            };
+
+            speedChartSend.YAxes = new Axis[]
+            {
+                new Axis
+                {
+                    Labeler = value => value.ToString("F2"),
+                    Name = "Speed (Mbps)"
+                }
+            };
         }
 
         private void btnBackSend_Click(object sender, RoutedEventArgs e)
@@ -42,7 +63,7 @@ namespace SK_Sender_App
         private void btnSelectFile_Click(object sender, RoutedEventArgs e)
         {
             var openFileDialog = new OpenFileDialog();
-            openFileDialog.Title = "Выберите файл для отправки";
+            openFileDialog.Title = "Select file to send";
             if (openFileDialog.ShowDialog() == true)
             {
                 selectedFilePath = openFileDialog.FileName;
@@ -51,56 +72,58 @@ namespace SK_Sender_App
 
         private async void btnSendFile_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(selectedFilePath))
+            if (string.IsNullOrEmpty(selectedFilePath) || string.IsNullOrEmpty(txtServerIp.Text))
             {
-                MessageBox.Show("Выберите файл для отправки.");
+                MessageBox.Show("Please select a file and enter the server IP address.");
                 return;
             }
 
-            string serverIp = txtServerIp.Text;
-            if (string.IsNullOrEmpty(serverIp))
-            {
-                MessageBox.Show("Введите IP сервера.");
-                return;
-            }
+            string serverIp = txtServerIp.Text; // Сохраняем значение IP в локальную переменную
 
-            await Task.Run(() => StartClient(serverIp, selectedFilePath));
+            await Task.Run(() => StartClient(serverIp, selectedFilePath, cts.Token));
         }
 
-        private void StartClient(string serverIp, string filePath)
+        private void StartClient(string serverIp, string filePath, CancellationToken token)
         {
-            TcpClient client = new TcpClient(serverIp, Port);
-            NetworkStream ns = client.GetStream();
-            Dispatcher.Invoke(() => txtStatusSend.Text = $"Connected to server: {serverIp}");
-
-            using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+            try
             {
-                byte[] buffer = new byte[4096];
-                int bytesRead;
-                long fileSize = new FileInfo(filePath).Length;
-                long totalBytesSent = 0;
-                stopwatch.Start();
+                TcpClient client = new TcpClient(serverIp, Port);
+                Dispatcher.Invoke(() => txtStatusSend.Text = $"Connected to server: {serverIp}");
+                NetworkStream ns = client.GetStream();
 
-                while ((bytesRead = fs.Read(buffer, 0, buffer.Length)) > 0)
+                using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
                 {
-                    ns.Write(buffer, 0, bytesRead);
-                    totalBytesSent += bytesRead;
+                    byte[] buffer = new byte[4096];
+                    int bytesRead;
+                    long totalBytesSent = 0;
+                    stopwatch.Start();
 
-                    // Update progress bar
-                    int progress = (int)((totalBytesSent * 100) / fileSize);
-                    Dispatcher.Invoke(() => progressBarSend.Value = progress);
+                    while ((bytesRead = fs.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        ns.Write(buffer, 0, bytesRead);
+                        totalBytesSent += bytesRead;
 
-                    // Calculate and update speed
-                    double elapsedSeconds = stopwatch.Elapsed.TotalSeconds;
-                    double speed = (totalBytesSent * 8) / elapsedSeconds / 1_000_000; // Speed in Mbps
-                    Dispatcher.Invoke(() => UpdateSpeedData(speed));
+                        // Calculate and update speed
+                        double elapsedSeconds = stopwatch.Elapsed.TotalSeconds;
+                        double speed = (totalBytesSent * 8) / elapsedSeconds / 1_000_000; // Speed in Mbps
+                        Dispatcher.Invoke(() => UpdateSpeedData(speed));
+
+                        if (token.IsCancellationRequested)
+                        {
+                            break;
+                        }
+                    }
+
+                    stopwatch.Stop();
                 }
 
-                stopwatch.Stop();
+                Dispatcher.Invoke(() => txtStatusSend.Text = "File sent successfully.");
+                client.Close();
             }
-
-            Dispatcher.Invoke(() => txtStatusSend.Text = "File sent.");
-            client.Close();
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() => txtStatusSend.Text = $"Error: {ex.Message}");
+            }
         }
 
         private void UpdateSpeedData(double speed)

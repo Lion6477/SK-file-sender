@@ -20,7 +20,6 @@ namespace SK_Sender_App
         public ReceiveControl()
         {
             InitializeComponent();
-            
             Task.Run(() => StartServer(cts.Token));
 
             speedChartReceive.Series = new ISeries[]
@@ -29,6 +28,24 @@ namespace SK_Sender_App
                 {
                     Values = speedData,
                     Fill = null
+                }
+            };
+
+            speedChartReceive.XAxes = new Axis[]
+            {
+                new Axis
+                {
+                    Labeler = value => value.ToString("F0"),
+                    Name = "Time (s)"
+                }
+            };
+
+            speedChartReceive.YAxes = new Axis[]
+            {
+                new Axis
+                {
+                    Labeler = value => value.ToString("F2"),
+                    Name = "Speed (Mbps)"
                 }
             };
         }
