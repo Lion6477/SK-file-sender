@@ -1,0 +1,104 @@
+﻿using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using System.Windows;
+using System.Windows.Controls;
+using LiveChartsCore;
+using LiveChartsCore.SkiaSharpView;
+
+namespace SK_Sender_App
+{
+    public partial class ReceiveControl : UserControl
+    {
+        const int Port = 12345;
+        CancellationTokenSource cts = new CancellationTokenSource();
+        ObservableCollection<double> speedData = new ObservableCollection<double>();
+        Stopwatch stopwatch = new Stopwatch();
+
+        public ReceiveControl()
+        {
+            InitializeComponent();
+            
+            Task.Run(() => StartServer(cts.Token));
+
+            speedChartReceive.Series = new ISeries[]
+            {
+                new LineSeries<double>
+                {
+                    Values = speedData,
+                    Fill = null
+                }
+            };
+        }
+
+        private void btnBackReceive_Click(object sender, RoutedEventArgs e)
+        {
+            cts.Cancel();
+            ((MainWindow)Application.Current.MainWindow).ContentArea.Content = null;
+        }
+
+        private void StartServer(CancellationToken token)
+        {
+            TcpListener listener = new TcpListener(IPAddress.Any, Port);
+            listener.Start();
+            Dispatcher.Invoke(() => txtStatusReceive.Text = "Server started, waiting for connection...");
+
+            try
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    if (listener.Pending())
+                    {
+                        TcpClient client = listener.AcceptTcpClient();
+                        Dispatcher.Invoke(() => txtStatusReceive.Text = $"Client connected: {((IPEndPoint)client.Client.RemoteEndPoint).Address}");
+                        NetworkStream ns = client.GetStream();
+
+                        using (FileStream fs = new FileStream("received_file", FileMode.Create, FileAccess.Write))
+                        {
+                            byte[] buffer = new byte[4096];
+                            int bytesRead;
+                            long totalBytesReceived = 0;
+                            stopwatch.Start();
+
+                            while ((bytesRead = ns.Read(buffer, 0, buffer.Length)) > 0)
+                            {
+                                fs.Write(buffer, 0, bytesRead);
+                                totalBytesReceived += bytesRead;
+
+                                // Calculate and update speed
+                                double elapsedSeconds = stopwatch.Elapsed.TotalSeconds;
+                                double speed = (totalBytesReceived * 8) / elapsedSeconds / 1_000_000; // Speed in Mbps
+                                Dispatcher.Invoke(() => UpdateSpeedData(speed));
+                            }
+
+                            stopwatch.Stop();
+                        }
+
+                        Dispatcher.Invoke(() => txtStatusReceive.Text = "File received.");
+                        client.Close();
+                    }
+                    else
+                    {
+                        Thread.Sleep(100); // Немного ждем, чтобы не загружать процессор
+                    }
+                }
+            }
+            finally
+            {
+                listener.Stop();
+                Dispatcher.Invoke(() => txtStatusReceive.Text = "Server stopped.");
+            }
+        }
+
+        private void UpdateSpeedData(double speed)
+        {
+            speedData.Add(speed);
+            if (speedData.Count > 100) // Limiting the number of data points
+            {
+                speedData.RemoveAt(0);
+            }
+        }
+    }
+}

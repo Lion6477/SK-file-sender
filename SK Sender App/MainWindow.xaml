@@ -1,0 +1,12 @@
+﻿<Window x:Class="SK_Sender_App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="File Transfer App" Height="350" Width="525">
+    <Grid>
+        <DockPanel VerticalAlignment="Top" HorizontalAlignment="Center">
+            <Button Name="btnReceive" Content="Send" Width="100" Height="30" Click="btnReceive_Click" />
+            <Button Name="btnSend" Content="Receive" Width="100" Height="30" Margin="10,0,0,0" Click="btnSend_Click" />
+        </DockPanel>
+        <ContentControl Name="ContentArea" />
+    </Grid>
+</Window>
