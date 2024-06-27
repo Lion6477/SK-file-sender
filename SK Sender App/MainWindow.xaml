@@ -4,8 +4,8 @@
         Title="File Transfer App" Height="350" Width="525">
     <Grid>
         <DockPanel VerticalAlignment="Top" HorizontalAlignment="Center">
-            <Button Name="btnReceive" Content="Send" Width="100" Height="30" Click="btnReceive_Click" />
-            <Button Name="btnSend" Content="Receive" Width="100" Height="30" Margin="10,0,0,0" Click="btnSend_Click" />
+            <Button Name="btnReceive" Content="Receive" Width="100" Height="30" Click="btnReceive_Click" />
+            <Button Name="btnSend" Content="Send" Width="100" Height="30" Margin="10,0,0,0" Click="btnSend_Click" />
         </DockPanel>
         <ContentControl Name="ContentArea" />
     </Grid>
