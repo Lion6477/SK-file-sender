@@ -16,6 +16,7 @@ namespace SK_Sender_App
         CancellationTokenSource cts = new CancellationTokenSource();
         ObservableCollection<double> speedData = new ObservableCollection<double>();
         Stopwatch stopwatch = new Stopwatch();
+        long fileSize;
 
         public ReceiveControl()
         {
@@ -72,25 +73,35 @@ namespace SK_Sender_App
                         Dispatcher.Invoke(() => txtStatusReceive.Text = $"Client connected: {((IPEndPoint)client.Client.RemoteEndPoint).Address}");
                         NetworkStream ns = client.GetStream();
 
-                        using (FileStream fs = new FileStream("received_file", FileMode.Create, FileAccess.Write))
+                        using (BinaryReader br = new BinaryReader(ns))
                         {
-                            byte[] buffer = new byte[4096];
-                            int bytesRead;
-                            long totalBytesReceived = 0;
-                            stopwatch.Start();
+                            // Read file size first
+                            fileSize = br.ReadInt64();
+                            Dispatcher.Invoke(() => progressBarReceive.Maximum = fileSize);
 
-                            while ((bytesRead = ns.Read(buffer, 0, buffer.Length)) > 0)
+                            using (FileStream fs = new FileStream("received_file", FileMode.Create, FileAccess.Write))
                             {
-                                fs.Write(buffer, 0, bytesRead);
-                                totalBytesReceived += bytesRead;
+                                byte[] buffer = new byte[4096];
+                                int bytesRead;
+                                long totalBytesReceived = 0;
+                                stopwatch.Start();
 
-                                // Calculate and update speed
-                                double elapsedSeconds = stopwatch.Elapsed.TotalSeconds;
-                                double speed = (totalBytesReceived * 8) / elapsedSeconds / 1_000_000; // Speed in Mbps
-                                Dispatcher.Invoke(() => UpdateSpeedData(speed));
+                                while ((bytesRead = ns.Read(buffer, 0, buffer.Length)) > 0)
+                                {
+                                    fs.Write(buffer, 0, bytesRead);
+                                    totalBytesReceived += bytesRead;
+
+                                    // Update progress bar
+                                    Dispatcher.Invoke(() => progressBarReceive.Value = totalBytesReceived);
+
+                                    // Calculate and update speed
+                                    double elapsedSeconds = stopwatch.Elapsed.TotalSeconds;
+                                    double speed = (totalBytesReceived * 8) / elapsedSeconds / 1_000_000; // Speed in Mbps
+                                    Dispatcher.Invoke(() => UpdateSpeedData(speed));
+                                }
+
+                                stopwatch.Stop();
                             }
-
-                            stopwatch.Stop();
                         }
 
                         Dispatcher.Invoke(() => txtStatusReceive.Text = "File received.");
@@ -112,7 +123,7 @@ namespace SK_Sender_App
         private void UpdateSpeedData(double speed)
         {
             speedData.Add(speed);
-            if (speedData.Count > 100) // Limiting the number of data points
+            if (speedData.Count > 60) // Limiting the number of data points to the last 60 seconds
             {
                 speedData.RemoveAt(0);
             }
