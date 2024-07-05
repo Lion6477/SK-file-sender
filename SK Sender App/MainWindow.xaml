@@ -10,7 +10,7 @@
         <StackPanel DockPanel.Dock="Left" Width="150" Background="LightGray">
             <DockPanel>
                 <TextBlock Text="Version:"></TextBlock>
-                <TextBlock Name="versionNumber" Text="1.22" Margin="5,0,0,0"></TextBlock>
+                <TextBlock Name="versionNumber" Text="1.3.1" Margin="5,0,0,0"></TextBlock>
             </DockPanel>
             
             <Button Name="btnReceive" Content="Receive" Margin="10" Click="btnReceive_Click" />

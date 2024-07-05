@@ -57,7 +57,7 @@ namespace SK_Sender_App
             ((MainWindow)Application.Current.MainWindow).ContentArea.Content = null;
         }
 
-        private void StartServer(CancellationToken token)
+        private async void StartServer(CancellationToken token)
         {
             TcpListener listener = new TcpListener(IPAddress.Any, Port);
             listener.Start();
@@ -69,7 +69,7 @@ namespace SK_Sender_App
                 {
                     if (listener.Pending())
                     {
-                        TcpClient client = listener.AcceptTcpClient();
+                        TcpClient client = await listener.AcceptTcpClientAsync();
                         Dispatcher.Invoke(() => txtStatusReceive.Text = $"Client connected: {((IPEndPoint)client.Client.RemoteEndPoint).Address}");
                         NetworkStream ns = client.GetStream();
 
@@ -81,14 +81,14 @@ namespace SK_Sender_App
 
                             using (FileStream fs = new FileStream("received_file", FileMode.Create, FileAccess.Write))
                             {
-                                byte[] buffer = new byte[4096];
+                                byte[] buffer = new byte[64 * 1024]; // Buffer size
                                 int bytesRead;
                                 long totalBytesReceived = 0;
                                 stopwatch.Start();
 
-                                while ((bytesRead = ns.Read(buffer, 0, buffer.Length)) > 0)
+                                while ((bytesRead = await ns.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
                                 {
-                                    fs.Write(buffer, 0, bytesRead);
+                                    await fs.WriteAsync(buffer, 0, bytesRead, token);
                                     totalBytesReceived += bytesRead;
 
                                     // Update progress bar
@@ -109,7 +109,7 @@ namespace SK_Sender_App
                     }
                     else
                     {
-                        Thread.Sleep(100); // Немного ждем, чтобы не загружать процессор
+                        await Task.Delay(10); // Chill
                     }
                 }
             }
